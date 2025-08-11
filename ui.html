@@ -1,0 +1,309 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Component Description Markdown</title>
+  <style>
+    :root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+    body { margin: 0; color: #111; }
+    .wrap {
+      padding: 12px;
+      display: grid;
+      gap: 16px;
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      min-width: 0;
+      margin-bottom: 8px;
+    }
+    button, select, input[type="text"] {
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+      padding: 0 10px;
+      background: #fff;
+      font: inherit;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+    button.primary { background: #111827; color: #fff; border-color: #111827; }
+    .list {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 4px 8px 12px 8px;
+      /* Remove top padding so sticky header sits flush */
+      max-height: 360px;
+      overflow: auto;
+      max-width: 100%;
+      overflow-x: auto;
+      margin-top: 12px;
+      margin-bottom: 12px;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 0;
+      max-width: 100%;
+      min-width: 0;
+    }
+    .muted { color: #6b7280; font-size: 12px; }
+    .hint { color: #6b7280; font-size: 11px; }
+    .badge { font-size: 11px; padding: 2px 6px; border-radius: 999px; border: 1px solid #e5e7eb; }
+    .controls { display: flex; gap: 12px; justify-content: space-between; align-items: center; }
+    .sticky { position: sticky; top: 0; background: white; padding-bottom: 8px; }
+    /* Ensure nameCol and metaCol are responsive and truncate */
+    .nameCol, .metaCol {
+      min-width: 0;
+      max-width: 100%;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .header { display: grid; gap: 4px; margin-bottom: 8px; }
+    .title { font-weight: 600; font-size: 14px; }
+    .desc { color: #6b7280; font-size: 12px; }
+    .tabs { display: flex; gap: 16px; margin-top: 4px; margin-bottom: 4px; border-bottom: 1px solid #e5e7eb; }
+    .tab { background: transparent; border: none; padding: 8px 0; cursor: pointer; font: inherit; color: #374151; border-bottom: 2px solid transparent; border-radius: 0; }
+    .tab:hover { color: #111827; }
+    .tab:focus-visible { outline: none; border-bottom-color: #9ca3af; }
+    .tab.active { color: #111827; font-weight: 600; border-bottom-color: #111827; }
+    .tabpanel { padding-top: 2px; }
+    .coming { padding: 24px 8px; display: grid; gap: 6px; }
+    .coming-title { font-weight: 600; }
+    .tab-desc { color: #6b7280; font-size: 12px; margin-bottom: 24px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div class="title">🪙 Coin DS Assistant</div>
+      <div class="desc">
+        Manage your design system in Figma. This plugin provides tools for scanning components, generating docs, and more across tabs.
+      </div>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab active" id="tab1Btn" role="tab" aria-selected="true" aria-controls="tab1Content">📜 Desc.md</button>
+      <button class="tab" id="tab2Btn" role="tab" aria-selected="false" aria-controls="tab2Content">🚧 Soon</button>
+    </div>
+    <div id="tab1Content" class="tabpanel" role="tabpanel" aria-labelledby="tab1Btn">
+      <div class="tab-desc">Scans published component sets in the current file and generates Markdown docs. Export a single .md or one per component. ⏳ Large files may take longer to process.</div>
+      <div class="toolbar">
+        <button id="scan">Scan</button>
+        <input id="search" type="text" placeholder="Filter…" value="❖" style="flex:1" />
+        <select id="mode">
+          <option value="combined">Single .md</option>
+          <option value="multi">Per-component .md</option>
+        </select>
+        <button class="primary" id="sync">Sync</button>
+      </div>
+
+      <div class="list" id="list"></div>
+
+      <div class="controls">
+        <span class="muted" id="count">0 selected</span>
+        <div>
+          <button id="selectAll">Select All</button>
+          <button id="clearAll">Clear</button>
+          <button id="close">Close</button>
+        </div>
+      </div>
+    </div>
+    <div id="tab2Content" class="tabpanel" role="tabpanel" aria-labelledby="tab2Btn" style="display:none">
+      <div class="coming">
+        <div class="coming-title">🚧 Second tab is coming soon</div>
+        <div class="coming-desc muted">We’re building more tools for managing tokens, audits, and releases. Stay tuned!</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    var allItems = [];   // from plugin (components + sets)
+    var filtered = [];   // filtered for UI
+    var selected = {};   // id -> true
+
+    // Tabs logic
+    var tab1Btn = document.getElementById('tab1Btn');
+    var tab2Btn = document.getElementById('tab2Btn');
+    var tab1Content = document.getElementById('tab1Content');
+    var tab2Content = document.getElementById('tab2Content');
+    function activateTab(tabIndex) {
+      if (tabIndex === 1) {
+        tab1Btn.classList.add('active');
+        tab1Btn.setAttribute('aria-selected', 'true');
+        tab2Btn.classList.remove('active');
+        tab2Btn.setAttribute('aria-selected', 'false');
+        tab1Content.style.display = '';
+        tab2Content.style.display = 'none';
+      } else {
+        tab2Btn.classList.add('active');
+        tab2Btn.setAttribute('aria-selected', 'true');
+        tab1Btn.classList.remove('active');
+        tab1Btn.setAttribute('aria-selected', 'false');
+        tab2Content.style.display = '';
+        tab1Content.style.display = 'none';
+      }
+    }
+    tab1Btn.onclick = function(){ activateTab(1); };
+    tab2Btn.onclick = function(){ activateTab(2); };
+
+    function post(type, payload) {
+      parent.postMessage({ pluginMessage: { type: type, payload: payload } }, '*');
+    }
+
+    function renderList() {
+      var list = document.getElementById('list');
+      list.innerHTML = "";
+
+      var q = document.getElementById('search').value.trim().toLowerCase();
+      filtered = [];
+      for (var i = 0; i < allItems.length; i++) {
+        var it = allItems[i];
+        var hay = (it.name + " " + (it.page || "") + " " + (it.kind || "")).toLowerCase();
+        if (!q || hay.indexOf(q) !== -1) filtered.push(it);
+      }
+
+      var header = document.createElement('div');
+      header.className = "row sticky";
+      header.innerHTML = '<input type="checkbox" id="selTop" />'
+        + '<div><strong>Name</strong></div>'
+        + '<div class="muted">Type &nbsp;&middot;&nbsp; Page</div>';
+      list.appendChild(header);
+
+      var selTop = document.getElementById('selTop');
+      selTop.onchange = function (e) {
+        for (var i = 0; i < filtered.length; i++) selected[filtered[i].id] = e.target.checked;
+        updateCount();
+        renderList(); // refresh checkboxes
+      };
+
+      for (var j = 0; j < filtered.length; j++) {
+        var n = filtered[j];
+        var row = document.createElement('div');
+        row.className = "row";
+        var checked = !!selected[n.id];
+
+        row.innerHTML =
+          '<input type="checkbox" ' + (checked ? 'checked' : '') + ' data-id="' + n.id + '"/>'
+          + '<div>' + escapeHTML(n.name) + (n.kind === "set" ? ' <span class="badge">Set</span>' : '') + '</div>'
+          + '<div class="muted">' + (n.kind === "set" ? 'Set' : 'Component') + ' &nbsp;&middot;&nbsp; ' + escapeHTML(n.page || '-') + '</div>';
+
+        list.appendChild(row);
+      }
+
+      var inputs = list.querySelectorAll('input[type="checkbox"][data-id]');
+      for (var t = 0; t < inputs.length; t++) {
+        inputs[t].onchange = function (ev) {
+          var id = ev.target.getAttribute('data-id');
+          selected[id] = !!ev.target.checked;
+          updateCount();
+        };
+      }
+
+      updateCount();
+    }
+
+    function updateCount() {
+      var c = 0;
+      for (var k in selected) if (selected[k]) c++;
+      document.getElementById('count').textContent = c + " selected";
+    }
+
+    function escapeHTML(s) {
+      return (s || "").replace(/[&<>\"']/g, function (m) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]);
+      });
+    }
+
+    // Buttons
+    document.getElementById('scan').onclick = function () {
+      this.textContent = "Scanning...";
+      this.disabled = true;
+      post('scan');
+    };
+
+    document.getElementById('sync').onclick = function () {
+      var ids = [];
+      for (var id in selected) if (selected[id]) ids.push(id);
+      if (!ids.length) {
+        alert("Select at least one row.");
+        return;
+      }
+      var mode = document.getElementById('mode').value;
+      post('sync', { selectedIds: ids, mode: mode });
+    };
+
+    document.getElementById('selectAll').onclick = function () {
+      for (var i = 0; i < filtered.length; i++) selected[filtered[i].id] = true;
+      renderList();
+    };
+    document.getElementById('clearAll').onclick = function () {
+      selected = {};
+      renderList();
+    };
+    document.getElementById('close').onclick = function () {
+      post('close');
+    };
+    document.getElementById('search').oninput = renderList;
+
+    // Receive from plugin
+    window.onmessage = function (event) {
+      var msg = event.data.pluginMessage;
+      if (!msg) return;
+
+      if (msg.type === 'scan-result') {
+        allItems = msg.payload.components || [];
+        selected = {};
+        for (var i = 0; i < allItems.length; i++) {
+          if (allItems[i].kind === "component") selected[allItems[i].id] = true; // preselect components
+        }
+        renderList();
+        // Reset Scan button
+        var scanBtn = document.getElementById('scan');
+        scanBtn.textContent = "Scan";
+        scanBtn.disabled = false;
+      }
+
+      if (msg.type === 'files-ready') {
+        var files = msg.payload.files || [];
+        var mode = msg.payload.mode || "multi";
+
+        if (mode === "combined") {
+          if (!files.length) return;
+          downloadBlob(new Blob([files[0].content], { type: "text/markdown" }), files[0].filename);
+          return;
+        }
+
+        // multi — download each file
+        (function downloadSequentially(i) {
+          if (i >= files.length) return;
+          var f = files[i];
+          downloadBlob(new Blob([f.content], { type: "text/markdown" }), f.filename);
+          setTimeout(function () { downloadSequentially(i + 1); }, 150);
+        })(0);
+      }
+    };
+
+    function downloadBlob(blob, filename) {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename || 'file.md';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    // Initial render
+    renderList();
+  </script>
+</body>
+</html>
